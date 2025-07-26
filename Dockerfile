@@ -1,30 +1,35 @@
-# Use slim Python base
-FROM python:3.10-slim as base
+# Base image
+FROM python:3.10-slim AS base
 
-# Install system dependencies (only what's needed)
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# System packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# Create working directory
 WORKDIR /app
 
-# Install Python dependencies
+# Copy only requirements first (for better caching)
 COPY requirements.txt .
 
-# Optional: Use pip cache mount for faster rebuilds (Docker 18.09+)
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy app files
+# Copy entire app directory
 COPY app ./app
-COPY main.py .
 
-# Optional: If using config, copy that too
-COPY app/config.py ./app/config.py
+# Optional: Copy config, model files, drain3.ini if needed
+COPY drain3.ini .
+COPY .env .env  
 
 # Expose FastAPI port
 EXPOSE 8000
 
-# Start the FastAPI server
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the FastAPI app
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

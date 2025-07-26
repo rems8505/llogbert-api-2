@@ -7,7 +7,6 @@ __pycache__/
 *.swp
 .venv/
 venv/
-.env
 .git/
 .gitignore
 *.pt
