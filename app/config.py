@@ -1,7 +1,7 @@
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 class AppSettings(BaseSettings):
-    checkpoint: "./best_ft.pt"
+    checkpoint: str
     drain_state: str
     vocab_size: int
     topk: int = 5
