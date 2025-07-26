@@ -9,21 +9,43 @@ import re
 
 from drain3 import TemplateMiner
 from drain3.file_persistence import FilePersistence
-from .model import LogBERT
 
-# ------------------------------ Regex --------------------------------
-LOG_REGEX = re.compile(
-    r'^nova-compute\.log\.\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2} '
-    r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{3})? '
-    r'\d+ '
-    r'(INFO|ERROR|DEBUG|WARNING|WARN|CRITICAL) '
-    r'[a-zA-Z0-9_.]+ '
-    r'(?:\[[^\]]*\] )*'
-    r'.+'
-)
 
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class LogBERT(nn.Module):
+    def __init__(self, vocab_size: int, dim: int = 128, max_len: int = 33, nhead: int = 4, nlayers: int = 2):
+        super().__init__()
+        self.token_emb = nn.Embedding(vocab_size, dim)
+        self.pos_emb = nn.Embedding(max_len, dim)
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=dim,
+            nhead=nhead,
+            dim_feedforward=256,
+            activation='relu',
+            batch_first=True
+        )
+
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=nlayers)
+        self.drop = nn.Dropout(0.1)
+        self.mlkp_head = nn.Linear(dim, vocab_size)  # ← FIXED name here
+
+    def forward(self, x):
+        B, L = x.size()
+        tok = self.token_emb(x)
+        pos = self.pos_emb(torch.arange(L, device=x.device))
+        z = tok + pos
+        z = self.drop(z)
+        z = self.encoder(z)
+        return self.mlkp_head(z), z  # ← Also changed here
+
+
+# ---------------------- Miss Count Function ----------------------
 IGNORE_IDX = -100
-
 
 @torch.no_grad()
 def miss_count(model: LogBERT,
@@ -42,6 +64,7 @@ def miss_count(model: LogBERT,
     hit = top.eq(labels.unsqueeze(-1)).any(-1)
     miss = (~hit)[0, pos]
     return int(miss.sum()), num_mask
+
 
 
 # --------------------------- Input Model ---------------------------

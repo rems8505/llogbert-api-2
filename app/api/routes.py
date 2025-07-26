@@ -4,7 +4,7 @@ from typing import List
 import torch
 
 from app.config import settings
-from app.model.inference import model, miner, device, MASK_ID, DIST_ID
+from app.model import inference  # ✅ Import the entire module
 from app.parser.validator import validate_line
 from app.model.bert import miss_count
 
@@ -19,15 +19,20 @@ def score_batch(batch: LogBatch):
     for line in batch.lines:
         try:
             clean_line = validate_line(line)
-            cid = miner.add_log_message(clean_line)["cluster_id"]
-            if cid >= MASK_ID:
-                return {"is_anomaly": True, "reason": "unseen_template", "cluster_id": int(cid), "score": 1.0}
+            cid = inference.miner.add_log_message(clean_line)["cluster_id"]
+            if cid >= inference.MASK_ID:
+                return {
+                    "is_anomaly": True,
+                    "reason": "unseen_template",
+                    "cluster_id": int(cid),
+                    "score": 1.0
+                }
             ids.append(cid + 1)
         except ValueError as ve:
             raise HTTPException(status_code=422, detail=str(ve))
 
-    seq = torch.tensor([[DIST_ID] + ids], dtype=torch.long, device=device)
-    miss_cnt, num_mask = miss_count(model, seq, settings.topk, settings.mask_ratio)
+    seq = torch.tensor([[inference.DIST_ID] + ids], dtype=torch.long, device=inference.device)
+    miss_cnt, num_mask = miss_count(inference.model, seq, settings.topk, settings.mask_ratio)
     return {
         "is_anomaly": miss_cnt > settings.r,
         "reason": "miss_ratio",
